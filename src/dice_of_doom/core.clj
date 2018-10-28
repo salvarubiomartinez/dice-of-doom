@@ -14,6 +14,10 @@
 (defn gen-board []
   (take *board-hexnum* (repeatedly (fn [] (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*)))))))
 
+(defn gen-board' []
+  (for [x (range *board-hexnum*)]
+    (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*)))))
+
 (defn player-letter [n]
   (if (= n 0) :A :B))
 
@@ -32,6 +36,15 @@
                              (str (player-letter (first hex)) "-" (second hex) " ")))
                          (range *board-size*))))))
          (range *board-size*)))))
+ 
+(defn draw-board' [board]
+  (doseq [y (range *board-size*)]
+    (doseq [x (range (- *board-size* y))]
+      (print "   "))
+    (doseq [x (range *board-size*)]
+      (let [hex (nth board (+ x (* *board-size* y)))]
+        (print (str (player-letter (first hex)) "-" (second hex) " "))))
+    (println "")))
 
 (def board (gen-board))
 
