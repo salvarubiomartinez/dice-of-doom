@@ -11,17 +11,17 @@
 (def *board-size* 2)
 (def *board-hexnum* (* *board-size* *board-size*))
 
-(defn gen-board []
+(defn gen-board' []
   (take *board-hexnum* (repeatedly (fn [] (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*)))))))
 
-(defn gen-board' []
+(defn gen-board []
   (apply vector (for [x (range *board-hexnum*)]
-    (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*))))))
+                  (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*))))))
 
 (defn player-letter [n]
   (if (= n 0) :A :B))
 
-(defn draw-board [board]
+(defn draw-board' [board]
   (dorun
    (map println 
         (map
@@ -36,8 +36,8 @@
                              (str (player-letter (first hex)) "-" (second hex) " ")))
                          (range *board-size*))))))
          (range *board-size*)))))
- 
-(defn draw-board' [board]
+
+(defn draw-board [board]
   (doseq [y (range *board-size*)]
     (doseq [x (range (- *board-size* y))]
       (print "   "))
@@ -46,7 +46,7 @@
         (print (str (player-letter (first hex)) "-" (second hex) " "))))
     (println "")))
 
-(def board (gen-board'))
+(def board (gen-board))
 
 (declare game-tree)
 (declare add-passing-move)
@@ -105,16 +105,12 @@
                        (+ spare-dice (dice dst))
                        nil)))))
 
-
 (defn attacking-moves'' [board cur-player spare-dice]
   (let [player (fn [pos] (first (board pos)))
         dice (fn [pos] (second (board pos)))
         source (filter (fn [src] (= (player src) cur-player)) (range *board-hexnum*))
         destination (neighbors source)]
     ()))
-
-
-
 
 (defn neighbors [pos]
   (let [up (- pos *board-size*)
@@ -129,10 +125,10 @@
 
 (defn board-attack [board player src dst dice]
   (apply vector (for [pos (range *board-hexnum*)
-        :let [hex (board pos)]]
-    (cond (= pos src) (list player 1)
-          (= pos dst) (list player (- dice 1))
-          :else hex))))
+                      :let [hex (board pos)]]
+                  (cond (= pos src) (list player 1)
+                        (= pos dst) (list player (- dice 1))
+                        :else hex))))
 
 (defn add-new-dice [board player spare-dice]
   (letfn [(f [lst n]
