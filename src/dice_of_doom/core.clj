@@ -2,13 +2,12 @@
   (:gen-class))
 
 (defn -main
-  "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (play-vs-computer (game-tree (gen-board) 0 0 true)))
 
 (def *num-players* 2)
 (def *max-dice* 3)
-(def *board-size* 2)
+(def *board-size* 3)
 (def *board-hexnum* (* *board-size* *board-size*))
 
 (defn gen-board' []
@@ -55,14 +54,16 @@
 (declare neighbors)
 (declare add-new-dice)
 
-(defn game-tree [board player spare-dice first-move]
-  (list player
+(defn game-tree' [board player spare-dice first-move]
+  (lazy-seq (list player
         board
         (add-passing-move board
                           player
                           spare-dice
                           first-move
-                          (attacking-moves board player spare-dice))))
+                          (attacking-moves board player spare-dice)))))
+
+(def game-tree (memoize game-tree'))
 
 (defn add-passing-move [board player spare-dice first-move moves]
   (if first-move
@@ -112,7 +113,7 @@
         destination (neighbors source)]
     ()))
 
-(defn neighbors [pos]
+(defn neighbors' [pos]
   (let [up (- pos *board-size*)
         down (+ pos *board-size*)]
     (for [p (concat (list up down)
@@ -122,6 +123,8 @@
                       (list (+ pos 1) (+ down 1))))
           :when (and (>= p 0) (< p *board-hexnum*))]
       p)))
+
+(def neighbors (memoize neighbors'))
 
 (defn board-attack [board player src dst dice]
   (apply vector (for [pos (range *board-hexnum*)
@@ -142,6 +145,20 @@
                             (cons (first lst) (f (rest lst) n))))))]
     (apply vector (f (apply list board) spare-dice))))
 
+(defn add-new-dice' [board player spare-dice]
+  (letfn [(f [lst n acc]
+            (cond (nil? lst) nil
+                  (zero? n) lst
+                  :else (let [cur-player (first (first lst))
+                              cur-dice (first (rest (first lst)))]
+                          (if (and (= cur-player player) (< cur-dice *max-dice*))
+                            (recur (rest lst)
+                               (- n 1)
+                               (cons (list cur-player (+ cur-dice 1)) acc))
+                             (recur (rest lst) n (cons (first lst) acc))))))]
+    (apply vector (f (apply list board) spare-dice ()))))
+
+
 (declare play-vs-human)
 (declare print-info)
 (declare handle-human)
@@ -154,7 +171,6 @@
     (announce-winner (nth tree 1))))
 
 (defn print-info [tree]
-  (println "")
   (println (str "current player = " (player-letter (first tree))))
   (draw-board (second tree)))
 
@@ -167,8 +183,7 @@
         (if (not (nil? action))
           (println (str (first action) " -> " (second action)))
           (println "end turn"))))
-    (do (println "")
-    (second (nth  moves (- (read) 1))))))
+    (second (nth  moves (- (read) 1)))))
 
 (defn winners [board]
   (let [tally (map (fn [hex] (first hex)) board)
@@ -179,5 +194,37 @@
 (defn announce-winner [board]
   (let [w (winners board)]
     (if (> (count w) 1)
-      (println (str "The game is a tie between " (apply str (map player-letter w))))
+      (println (str "The game is a tie between " (apply str (map (fn [player] (str (player-letter player) " ")) w))))
       (println (str "The winner is " (player-letter (first w)))))))
+
+(declare rate-position)
+(declare get-ratings)
+
+(defn rate-position' [tree player]
+  (let [moves (nth tree 2)]
+    (if (not-empty moves)
+      (apply (if (= (first tree) player)
+               max
+               min)
+             (get-ratings tree player))
+      (let [w (winners (second tree))]
+        (if (some #{player} w)
+          (/ 1 (count w))
+          0)))))
+
+(def rate-position (memoize rate-position))
+
+(defn get-ratings [tree player]
+  (map (fn [move]
+         (rate-position (second move) player))
+       (nth tree 2)))
+
+(defn handle-computer [tree]
+  (let [ratings (get-ratings tree (first tree))]
+    (second (nth (nth tree 2) (.indexOf ratings (apply max ratings))))))
+
+(defn play-vs-computer [tree]
+  (print-info tree)
+  (cond (empty? (nth tree 2)) (announce-winner (second tree))
+        (zero? (first tree)) (play-vs-computer (handle-human tree))
+        :else (play-vs-computer (handle-computer tree))))
