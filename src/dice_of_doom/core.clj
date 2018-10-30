@@ -141,3 +141,43 @@
                                   (f (rest lst) (- n 1)))
                             (cons (first lst) (f (rest lst) n))))))]
     (apply vector (f (apply list board) spare-dice))))
+
+(declare play-vs-human)
+(declare print-info)
+(declare handle-human)
+(declare announce-winner)
+
+(defn play-vs-human [tree]
+  (print-info tree)
+  (if (not-empty (nth tree 2) )
+    (play-vs-human (handle-human tree))
+    (announce-winner (nth tree 1))))
+
+(defn print-info [tree]
+  (println "")
+  (println (str "current player = " (player-letter (first tree))))
+  (draw-board (second tree)))
+
+(defn handle-human [tree]
+  (println "choose your move:")
+  (let [moves (nth tree 2)]
+    (doseq [move moves]
+      (let [action (first move)]
+        (print (str (+ (.indexOf moves move) 1) ". "))
+        (if (not (nil? action))
+          (println (str (first action) " -> " (second action)))
+          (println "end turn"))))
+    (do (println "")
+    (second (nth  moves (- (read) 1))))))
+
+(defn winners [board]
+  (let [tally (map (fn [hex] (first hex)) board)
+        totals (frequencies tally)
+        best (apply max (vals totals))]
+    (map first (filter (fn [x] (= (second x) best)) totals))))
+
+(defn announce-winner [board]
+  (let [w (winners board)]
+    (if (> (count w) 1)
+      (println (str "The game is a tie between " (apply str (map player-letter w))))
+      (println (str "The winner is " (player-letter (first w)))))))
