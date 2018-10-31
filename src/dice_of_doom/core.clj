@@ -1,13 +1,30 @@
 (ns dice-of-doom.core
   (:gen-class))
 
+(declare gen-board)
+(declare game-tree)
+(declare add-passing-move)
+(declare attacking-moves)
+(declare board-attack)
+(declare neighbors)
+(declare add-new-dice)
+(declare play-vs-human)
+(declare print-info)
+(declare handle-human)
+(declare announce-winner)
+(declare rate-position)
+(declare get-ratings)
+(declare handle-computer)
+(declare play-vs-computer)
+
+
 (defn -main
   [& args]
   (play-vs-computer (game-tree (gen-board) 0 0 true)))
 
 (def *num-players* 2)
 (def *max-dice* 3)
-(def *board-size* 3)
+(def *board-size* 2)
 (def *board-hexnum* (* *board-size* *board-size*))
 
 (defn gen-board' []
@@ -47,21 +64,15 @@
 
 (def board (gen-board))
 
-(declare game-tree)
-(declare add-passing-move)
-(declare attacking-moves)
-(declare board-attack)
-(declare neighbors)
-(declare add-new-dice)
 
 (defn game-tree' [board player spare-dice first-move]
-  (lazy-seq (list player
+  (list player
         board
         (add-passing-move board
                           player
                           spare-dice
                           first-move
-                          (attacking-moves board player spare-dice)))))
+                          (attacking-moves board player spare-dice))))
 
 (def game-tree (memoize game-tree'))
 
@@ -93,7 +104,7 @@
          (range *board-hexnum*))))
 
 (defn attacking-moves [board cur-player spare-dice]
-  (let [player (fn [pos] (first (board pos)))
+ (let [player (fn [pos] (first (board pos)))
         dice (fn [pos] (second (board pos)))]
     (for [src (range *board-hexnum*)
           :when (= (player src) cur-player)
@@ -133,10 +144,10 @@
                         (= pos dst) (list player (- dice 1))
                         :else hex))))
 
-(defn add-new-dice [board player spare-dice]
+(defn add-new-dice' [board player spare-dice]
   (letfn [(f [lst n]
-            (cond (nil? lst) nil
-                  (zero? n) lst
+            (cond (empty? lst) '()
+                  (< n 1) lst
                   :else (let [cur-player (first (first lst))
                               cur-dice (first (rest (first lst)))]
                           (if (and (= cur-player player) (< cur-dice *max-dice*))
@@ -145,10 +156,10 @@
                             (cons (first lst) (f (rest lst) n))))))]
     (apply vector (f (apply list board) spare-dice))))
 
-(defn add-new-dice' [board player spare-dice]
+(defn add-new-dice [board player spare-dice]
   (letfn [(f [lst n acc]
-            (cond (nil? lst) nil
-                  (zero? n) lst
+            (cond (< n 1) (concat (reverse acc) lst)
+                  (empty? lst) (reverse acc) 
                   :else (let [cur-player (first (first lst))
                               cur-dice (first (rest (first lst)))]
                           (if (and (= cur-player player) (< cur-dice *max-dice*))
@@ -156,13 +167,12 @@
                                (- n 1)
                                (cons (list cur-player (+ cur-dice 1)) acc))
                              (recur (rest lst) n (cons (first lst) acc))))))]
+   ;; (println "previous" board)
+   ;; (println "player" player "spare dice" spare-dice)
+   ;; (println "after" (apply vector (f (apply list board) spare-dice ())))
     (apply vector (f (apply list board) spare-dice ()))))
 
 
-(declare play-vs-human)
-(declare print-info)
-(declare handle-human)
-(declare announce-winner)
 
 (defn play-vs-human [tree]
   (print-info tree)
@@ -197,9 +207,6 @@
       (println (str "The game is a tie between " (apply str (map (fn [player] (str (player-letter player) " ")) w))))
       (println (str "The winner is " (player-letter (first w)))))))
 
-(declare rate-position)
-(declare get-ratings)
-
 (defn rate-position' [tree player]
   (let [moves (nth tree 2)]
     (if (not-empty moves)
@@ -212,7 +219,7 @@
           (/ 1 (count w))
           0)))))
 
-(def rate-position (memoize rate-position))
+(def rate-position (memoize rate-position'))
 
 (defn get-ratings [tree player]
   (map (fn [move]
