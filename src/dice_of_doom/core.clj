@@ -89,19 +89,35 @@
 (defn attacking-moves' [board cur-player spare-dice]
   (let [player (fn [pos] (first (board pos)))
         dice (fn [pos] (second (board pos)))]
-    (map (fn [src]
-           (when (= (player src) cur-player)
-             (map (fn [dst]
-                    (when (and (not (= (player dst) cur-player))
-                               (> (dice src) (dice dst)))
-                      (list
-                       (list (list src dst)
-                             (game-tree (board-attack board cur-player src dst (dice src))
-                                        cur-player
-                                        (+ spare-dice (dice dst))
-                                        nil)))))
-                  (neighbors src))))
-         (range *board-hexnum*))))
+    (concat (map (fn [src]
+                   (when (= (player src) cur-player)
+                     (concat (map (fn [dst]
+                                    (when (and (not (= (player dst) cur-player))
+                                               (> (dice src) (dice dst)))
+                                      (list
+                                       (list (list src dst)
+                                             (game-tree (board-attack board cur-player src dst (dice src))
+                                                        cur-player
+                                                        (+ spare-dice (dice dst))
+                                                        nil)))))
+                                  (neighbors src)) )))
+                 (range *board-hexnum*)) )))
+
+(defn attacking-moves'' [board cur-player spare-dice]
+  (let [player (fn [pos] (first (board pos)))
+        dice (fn [pos] (second (board pos)))]
+    (apply concat (map (fn [src]
+                   (apply concat (map (fn [dst]
+                                  (list
+                                   (list (list src dst)
+                                         (game-tree (board-attack board cur-player src dst (dice src))
+                                                    cur-player
+                                                    (+ spare-dice (dice dst))
+                                                    nil))))
+                                (filter (fn [dst] (and (not (= (player dst) cur-player))
+                                                       (> (dice src) (dice dst)))) (neighbors src) )) ))
+                 (filter (fn [src] (= (player src) cur-player)) (range *board-hexnum*) )) )))
+
 
 (defn attacking-moves [board cur-player spare-dice]
  (let [player (fn [pos] (first (board pos)))
