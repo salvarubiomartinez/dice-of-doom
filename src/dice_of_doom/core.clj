@@ -38,7 +38,7 @@
                   (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*))))))
 
 (defn player-letter [n]
-  (if (= n 0) :A :B))
+  (if (= n 0) \A \B))
 
 (defn draw-board' [board]
   (dorun
@@ -48,7 +48,7 @@
            (apply str
                   (flatten
                    (list
-                    (map (fn [x] "   ")
+                    (map (fn [x] "  ")
                          (range (- *board-size* y))) 
                     (map (fn [x]
                            (let [hex (nth board (+ x (* *board-size* y)))]
@@ -59,7 +59,7 @@
 (defn draw-board [board]
   (doseq [y (range *board-size*)]
     (doseq [x (range (- *board-size* y))]
-      (print "   "))
+      (print "  "))
     (doseq [x (range *board-size*)]
       (let [hex (nth board (+ x (* *board-size* y)))]
         (print (str (player-letter (first hex)) "-" (second hex) " "))))
