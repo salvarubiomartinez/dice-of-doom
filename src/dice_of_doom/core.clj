@@ -26,7 +26,7 @@
 
 (def *num-players* 2)
 (def *max-dice* 3)
-(def *board-size* 6)
+(def *board-size* 5)
 (def *board-hexnum* (* *board-size* *board-size*))
 (def *ai-level* 4)
 
@@ -89,7 +89,7 @@
                                      true))
                     moves))))
 
-(defn attacking-moves [board cur-player spare-dice]
+(defn attacking-moves' [board cur-player spare-dice]
   (let [player (fn [pos] (first (board pos)))
         dice (fn [pos] (second (board pos)))]
     (lazy-seq
@@ -107,20 +107,44 @@
                                                                      (> (dice src) (dice dst)))) (lazy-seq (neighbors src)))))))
                         (filter (fn [src] (= (player src) cur-player)) (lazy-seq (range *board-hexnum*))))))))
 
-
-(defn attacking-moves' [board cur-player spare-dice]
- (let [player (fn [pos] (first (board pos)))
+(defn attacking-moves'' [board cur-player spare-dice]
+  (let [player (fn [pos] (first (board pos)))
         dice (fn [pos] (second (board pos)))]
-    (for [src (range *board-hexnum*)
-          :when (= (player src) cur-player)
-          dst (neighbors src)
-          :when (and (not (= (player dst) cur-player))
-                     (> (dice src) (dice dst)))]        
-      (list (list src dst)
-            (game-tree (board-attack board cur-player src dst (dice src))
-                       cur-player
-                       (+ spare-dice (dice dst))
-                       nil)))))
+    (->> (range *board-hexnum*)
+         (filter (fn [src] (= (player src) cur-player)))
+         (map (fn [src]
+                (->> src
+                     neighbors
+                     (filter (fn [dst]
+                               (and (not (= (player dst) cur-player))
+                                    (> (dice src) (dice dst)))))
+                     (map (fn [dst]
+                            (lazy-seq
+                             (list
+                              (list (list src dst)
+                                    (game-tree (board-attack board cur-player src dst (dice src))
+                                               cur-player
+                                               (+ spare-dice (dice dst))
+                                               nil))))))
+                     (apply concat)
+                     lazy-seq)))
+         (apply concat)
+         lazy-seq)))
+
+(defn attacking-moves [board cur-player spare-dice]
+  (let [player (fn [pos] (first (board pos)))
+        dice (fn [pos] (second (board pos)))]
+    (lazy-seq
+     (for [src (range *board-hexnum*)
+           :when (= (player src) cur-player)
+           dst (neighbors src)
+           :when (and (not (= (player dst) cur-player))
+                      (> (dice src) (dice dst)))]        
+       (list (list src dst)
+             (game-tree (board-attack board cur-player src dst (dice src))
+                        cur-player
+                        (+ spare-dice (dice dst))
+                        nil))) )))
 
 (defn neighbors' [pos]
   (let [up (- pos *board-size*)
@@ -260,3 +284,4 @@
                       nplayer (first nhex)
                       ndice (second nhex)]]
             (and (not (= player nplayer)) (> ndice dice))))))
+
