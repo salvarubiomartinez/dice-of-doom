@@ -16,7 +16,9 @@
 (declare get-ratings)
 (declare handle-computer)
 (declare play-vs-computer)
-
+(declare limit-tree-depth)
+(declare score-board)
+(declare threatened)
 
 (defn -main
   [& args]
@@ -24,8 +26,9 @@
 
 (def *num-players* 2)
 (def *max-dice* 3)
-(def *board-size* 2)
+(def *board-size* 6)
 (def *board-hexnum* (* *board-size* *board-size*))
+(def *ai-level* 4)
 
 (defn gen-board' []
   (take *board-hexnum* (repeatedly (fn [] (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*)))))))
@@ -79,47 +82,33 @@
 (defn add-passing-move [board player spare-dice first-move moves]
   (if first-move
     moves
-    (cons (list nil
-                (game-tree (add-new-dice board player (- spare-dice 1))
-                           (mod (+ player 1) *num-players*)
-                           0
-                           true))
-          moves)))
-
-(defn attacking-moves' [board cur-player spare-dice]
-  (let [player (fn [pos] (first (board pos)))
-        dice (fn [pos] (second (board pos)))]
-    (concat (map (fn [src]
-                   (when (= (player src) cur-player)
-                     (concat (map (fn [dst]
-                                    (when (and (not (= (player dst) cur-player))
-                                               (> (dice src) (dice dst)))
-                                      (list
-                                       (list (list src dst)
-                                             (game-tree (board-attack board cur-player src dst (dice src))
-                                                        cur-player
-                                                        (+ spare-dice (dice dst))
-                                                        nil)))))
-                                  (neighbors src)) )))
-                 (range *board-hexnum*)) )))
-
-(defn attacking-moves'' [board cur-player spare-dice]
-  (let [player (fn [pos] (first (board pos)))
-        dice (fn [pos] (second (board pos)))]
-    (apply concat (map (fn [src]
-                   (apply concat (map (fn [dst]
-                                  (list
-                                   (list (list src dst)
-                                         (game-tree (board-attack board cur-player src dst (dice src))
-                                                    cur-player
-                                                    (+ spare-dice (dice dst))
-                                                    nil))))
-                                (filter (fn [dst] (and (not (= (player dst) cur-player))
-                                                       (> (dice src) (dice dst)))) (neighbors src) )) ))
-                 (filter (fn [src] (= (player src) cur-player)) (range *board-hexnum*) )) )))
-
+    (lazy-seq (cons (list nil
+                          (game-tree (add-new-dice board player (- spare-dice 1))
+                                     (mod (+ player 1) *num-players*)
+                                     0
+                                     true))
+                    moves))))
 
 (defn attacking-moves [board cur-player spare-dice]
+  (let [player (fn [pos] (first (board pos)))
+        dice (fn [pos] (second (board pos)))]
+    (lazy-seq
+     (apply concat (map (fn [src]
+                          (lazy-seq
+                           (apply concat (map (fn [dst]
+                                                (lazy-seq
+                                                 (list
+                                                  (list (list src dst)
+                                                        (game-tree (board-attack board cur-player src dst (dice src))
+                                                                   cur-player
+                                                                   (+ spare-dice (dice dst))
+                                                                   nil))) ))
+                                              (filter (fn [dst] (and (not (= (player dst) cur-player))
+                                                                     (> (dice src) (dice dst)))) (lazy-seq (neighbors src)))))))
+                        (filter (fn [src] (= (player src) cur-player)) (lazy-seq (range *board-hexnum*))))))))
+
+
+(defn attacking-moves' [board cur-player spare-dice]
  (let [player (fn [pos] (first (board pos)))
         dice (fn [pos] (second (board pos)))]
     (for [src (range *board-hexnum*)
@@ -132,13 +121,6 @@
                        cur-player
                        (+ spare-dice (dice dst))
                        nil)))))
-
-(defn attacking-moves'' [board cur-player spare-dice]
-  (let [player (fn [pos] (first (board pos)))
-        dice (fn [pos] (second (board pos)))
-        source (filter (fn [src] (= (player src) cur-player)) (range *board-hexnum*))
-        destination (neighbors source)]
-    ()))
 
 (defn neighbors' [pos]
   (let [up (- pos *board-size*)
@@ -230,10 +212,7 @@
                max
                min)
              (get-ratings tree player))
-      (let [w (winners (second tree))]
-        (if (some #{player} w)
-          (/ 1 (count w))
-          0)))))
+      (score-board (second tree) player))))
 
 (def rate-position (memoize rate-position'))
 
@@ -243,7 +222,7 @@
        (nth tree 2)))
 
 (defn handle-computer [tree]
-  (let [ratings (get-ratings tree (first tree))]
+  (let [ratings (get-ratings (limit-tree-depth tree *ai-level*) (first tree))]
     (second (nth (nth tree 2) (.indexOf ratings (apply max ratings))))))
 
 (defn play-vs-computer [tree]
@@ -251,3 +230,33 @@
   (cond (empty? (nth tree 2)) (announce-winner (second tree))
         (zero? (first tree)) (play-vs-computer (handle-human tree))
         :else (play-vs-computer (handle-computer tree))))
+
+(defn limit-tree-depth [tree depth]
+  (list (first tree)
+        (second tree)
+        (if (zero? depth)
+          '()
+          (map (fn [move]
+                 (list (first move)
+                       (limit-tree-depth (second move) (- depth 1))))
+               (nth tree 2)))))
+
+(defn score-board [board player]
+  (apply + (for [pos (range *board-hexnum*)
+        :let [hex (board pos)]]
+    (if (= (first hex) player)
+      (if (threatened pos board)
+        1
+        2)
+      -1))))
+
+(defn threatened [pos board]
+  (some #{true}
+        (let [hex (nth board pos)
+              player (first hex)
+              dice (second hex)]
+          (for [n (neighbors pos)
+                :let [nhex (nth board n)
+                      nplayer (first nhex)
+                      ndice (second nhex)]]
+            (and (not (= player nplayer)) (> ndice dice))))))
