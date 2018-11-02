@@ -19,6 +19,9 @@
 (declare limit-tree-depth)
 (declare score-board)
 (declare threatened)
+(declare ab-get-ratings-max)
+(declare ab-get-ratings-min)
+(declare ab-rate-position)
 
 (defn -main
   [& args]
@@ -26,7 +29,7 @@
 
 (def *num-players* 2)
 (def *max-dice* 3)
-(def *board-size* 5)
+(def *board-size* 6)
 (def *board-hexnum* (* *board-size* *board-size*))
 (def *ai-level* 4)
 
@@ -246,7 +249,10 @@
        (nth tree 2)))
 
 (defn handle-computer [tree]
-  (let [ratings (get-ratings (limit-tree-depth tree *ai-level*) (first tree))]
+  (let [ratings (ab-get-ratings-max (limit-tree-depth tree *ai-level*)
+                                    (first tree)
+                                    Integer/MAX_VALUE
+                                    Integer/MIN_VALUE)]
     (second (nth (nth tree 2) (.indexOf ratings (apply max ratings))))))
 
 (defn play-vs-computer [tree]
@@ -284,4 +290,43 @@
                       nplayer (first nhex)
                       ndice (second nhex)]]
             (and (not (= player nplayer)) (> ndice dice))))))
+
+(defn ab-get-ratings-max [tree player upper-limit lower-limit]
+  (letfn [(f [moves lower-limit]
+            (when-not (empty? moves)
+              (let [x (ab-rate-position (second (first moves))
+                                        player
+                                        upper-limit
+                                        lower-limit)]
+                (if (>= x upper-limit)
+                  (list x)
+                  (cons x (f (rest moves) (max x lower-limit)))))))]
+    (f (nth tree 2) lower-limit)))
+
+(defn ab-get-ratings-min [tree player upper-limit lower-limit]
+  (letfn [(f [moves upper-limit]
+            (when-not (empty? moves)
+              (let [x (ab-rate-position (second (first moves))
+                                        player
+                                        upper-limit
+                                        lower-limit)]
+                (if (<= x lower-limit)
+                  (list x)
+                  (cons x (f (rest moves) (min x upper-limit)))))))]
+    (f (nth tree 2) upper-limit)))
+
+(defn ab-rate-position [tree player upper-limit lower-limit]
+  (let [moves (nth tree 2)]
+    (if (not-empty moves)
+      (if (= (first tree) player)
+        (apply max (ab-get-ratings-max tree
+                                       player
+                                       upper-limit
+                                       lower-limit))
+        (apply min (ab-get-ratings-min tree
+                                       player
+                                       upper-limit
+                                       lower-limit)))
+      (score-board (second tree) player))))
+
 
