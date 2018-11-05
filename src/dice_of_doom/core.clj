@@ -1,4 +1,8 @@
 (ns dice-of-doom.core
+  (:require [clojure.core.async
+             :as a
+             :refer [>! <! >!! <!! go chan buffer close! thread
+                     alts! alts!! timeout]])
   (:gen-class))
 
 (declare gen-board)
@@ -22,16 +26,19 @@
 (declare ab-get-ratings-max)
 (declare ab-get-ratings-min)
 (declare ab-rate-position)
-
-(defn -main
-  [& args]
-  (play-vs-computer (game-tree (gen-board) 0 0 true)))
+(declare ab-get-ratings-max')
+(declare ab-get-ratings-min')
+(declare ab-rate-position')
 
 (def *num-players* 2)
 (def *max-dice* 3)
 (def *board-size* 6)
 (def *board-hexnum* (* *board-size* *board-size*))
 (def *ai-level* 4)
+
+(defn -main
+  [& args]
+  (play-vs-computer (game-tree (gen-board) 0 0 true)))
 
 (defn gen-board' []
   (take *board-hexnum* (repeatedly (fn [] (list (rand-int *num-players*) (+ 1 (rand-int *max-dice*)))))))
@@ -255,6 +262,11 @@
                                     Integer/MIN_VALUE)]
     (second (nth (nth tree 2) (.indexOf ratings (apply max ratings))))))
 
+(defn handle-computer' [tree]
+  (let [ratings (get-ratings (limit-tree-depth tree *ai-level*)
+                                    (first tree))]
+    (second (nth (nth tree 2) (.indexOf ratings (apply max ratings))))))
+
 (defn play-vs-computer [tree]
   (print-info tree)
   (cond (empty? (nth tree 2)) (announce-winner (second tree))
@@ -329,4 +341,54 @@
                                        lower-limit)))
       (score-board (second tree) player))))
 
+
+(defn ab-get-ratings-max' [tree player upper-limit lower-limit]
+  (letfn [(f [moves lower-limit]
+            (when-not (empty? moves)
+              (let [in (chan)
+                    out (ab-rate-position' in)
+                    pp (>!! in [(second (first moves))
+                                player
+                                upper-limit
+                                lower-limit])
+                    x (<!! out)]
+                (if (>= x upper-limit)
+                  (list x)
+                  (cons x (f (rest moves) (max x lower-limit)))))))]
+    (f (nth tree 2) lower-limit)))
+
+(defn ab-get-ratings-min' [tree player upper-limit lower-limit]
+  (letfn [(f [moves upper-limit]
+            (when-not (empty? moves)
+              (let [in (chan)
+                    out (ab-rate-position' in)
+                    pp (>!! in [(second (first moves))
+                                player
+                                upper-limit
+                                lower-limit])
+                    x (<!! out)]
+                (if (<= x lower-limit)
+                  (list x)
+                  (cons x (f (rest moves) (min x upper-limit)))))))]
+    (f (nth tree 2) upper-limit)))
+
+
+(defn ab-rate-position' [in]
+  (let [out (chan)]
+    (go (while true
+          (>! out
+              (let [[tree player upper-limit lower-limit] (<! in)
+                    moves (nth tree 2)]
+                (if (not-empty moves)
+                  (if (= (first tree) player)
+                    (apply max (ab-get-ratings-max' tree
+                                                    player
+                                                    upper-limit
+                                                    lower-limit))
+                    (apply min (ab-get-ratings-min' tree
+                                                    player
+                                                    upper-limit
+                                                    lower-limit)))
+                  (score-board (second tree) player))) ) ))
+    out))
 
